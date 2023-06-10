@@ -34,7 +34,8 @@ async function run() {
     const classCollection = client.db('fashionDesign').collection('classes')
     const instructorCollection = client.db('fashionDesign').collection('instructors')
     const selectedClassCollection=client.db('fashionDesign').collection('selectedClass')
-    //class collections
+    const userCollection=client.db('fashionDesign').collection('users')
+    //class collections related api
     app.get('/classes', async (req, res) => {
       const result = await classCollection.find().toArray();
       res.send(result)
@@ -45,7 +46,7 @@ async function run() {
       const topsix = allClasses.slice(0, 6)
       res.send(topsix)
     })
-    //instructor collections
+    //instructor collections related api
     app.get('/instructors', async (req, res) => {
       const result = await instructorCollection.find().toArray();
       res.send(result)
@@ -55,7 +56,7 @@ async function run() {
       const topsix = allInstructors.slice(0, 6)
       res.send(topsix)
     })
-    //selectedClass collection
+    //selectedClass releted api
     app.get('/selected/classes', async (req, res) => {
       const email=req.query.email
       if(!email){
@@ -78,6 +79,18 @@ async function run() {
       const result=await selectedClassCollection.deleteOne(query)
       res.send(result)
     })
+    //userCollection related api
+    app.post('/users', async(req,res)=>{
+      const user=req.body
+      const query={email:user.email}
+      const existingUser=await userCollection.findOne(query)
+      if(existingUser){
+        return res.send({message:'User already exist in database'})
+      }
+      const result=await userCollection.insertOne(user)
+      res.send(result)
+    })
+
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
