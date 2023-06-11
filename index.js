@@ -79,7 +79,11 @@ async function run() {
       const result=await selectedClassCollection.deleteOne(query)
       res.send(result)
     })
-    //userCollection related api
+    //user Collection related api
+    app.get('/users', async(req,res)=>{
+      const result=await userCollection.find().toArray()
+      res.send(result)
+    })
     app.post('/users', async(req,res)=>{
       const user=req.body
       const query={email:user.email}
@@ -90,7 +94,18 @@ async function run() {
       const result=await userCollection.insertOne(user)
       res.send(result)
     })
-
+    //user role manage api
+    app.put('/users/admin/:id', async(req,res)=>{
+      const id=req.params.id
+      const query={_id: new ObjectId(id)}
+      const updateDoc = {
+        $set: {
+          role: `admin`
+        },
+      }; 
+      const result=await userCollection.updateOne(query,updateDoc)
+      res.send(result)
+    })
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
