@@ -1,8 +1,9 @@
 const express = require('express')
-const app = express()
-const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const jwt = require('jsonwebtoken');
 const cors = require('cors')
 require('dotenv').config()
+const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
+const app = express()
 const port = process.env.PORT || '5000'
 
 //middleware
@@ -28,6 +29,11 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
+    app.post('/jwt',async(req,res)=>{
+      const user=req.body
+      const token=jwt.sign(user,process.env.JWT_ACCESS_TOKEN,{expiresIn:'1h'})
+      res.send({token})
+    })
     // Connect the client to the server	(optional starting in v4.7)
     await client.connect();
 
@@ -101,6 +107,17 @@ async function run() {
       const updateDoc = {
         $set: {
           role: `admin`
+        },
+      }; 
+      const result=await userCollection.updateOne(query,updateDoc)
+      res.send(result)
+    })
+    app.put('/users/instructor/:id', async(req,res)=>{
+      const id=req.params.id
+      const query={_id: new ObjectId(id)}
+      const updateDoc = {
+        $set: {
+          role: `instructor`
         },
       }; 
       const result=await userCollection.updateOne(query,updateDoc)
