@@ -14,6 +14,21 @@ app.get('/', (req, res) => {
   res.send('server running')
 })
 
+const verifyJWT=(req,res,next)=>{
+  const authorization=req.headers.authorization
+  if(!authorization){
+    return res.status(401).send({error:true, message:"Unauthorized Access"})
+  }
+  const token=authorization.split(' ')[1]
+  jwt.verify(token,process.env.JWT_ACCESS_TOKEN,(err,decoded)=>{
+    if(err){
+      return res.status(401).send({error:true, message:"Unauthorized Access"})
+    }
+    req.decoded=decoded
+    next()
+  })
+}
+
 //mongodb start
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.ow6kx3p.mongodb.net/?retryWrites=true&w=majority`;
@@ -86,7 +101,7 @@ async function run() {
       res.send(result)
     })
     //user Collection related api
-    app.get('/users', async(req,res)=>{
+    app.get('/users', verifyJWT, async(req,res)=>{
       const result=await userCollection.find().toArray()
       res.send(result)
     })
@@ -121,6 +136,14 @@ async function run() {
         },
       }; 
       const result=await userCollection.updateOne(query,updateDoc)
+      res.send(result)
+    })
+    //check admin or user
+    app.get('/users/admin/:email', async(req,res)=>{
+      const email=req.params.email;
+      const query={email:email}
+      const user=await userCollection.findOne(query)
+      const result={admin:user?.role==='admin'}
       res.send(result)
     })
     // Send a ping to confirm a successful connection
