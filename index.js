@@ -56,12 +56,37 @@ async function run() {
     const instructorCollection = client.db('fashionDesign').collection('instructors')
     const selectedClassCollection=client.db('fashionDesign').collection('selectedClass')
     const userCollection=client.db('fashionDesign').collection('users')
+
+    //verify user Admin or Instructor or others
+    const verifyAdmin=async(req,res,next)=>{
+      const verifiedEmail=req.decoded.email
+      const query={email:verifiedEmail}
+      const user=await userCollection.findOne(query)
+      if(user?.role!=='admin'){
+        res.status(403).send({error:true, message:"Forbidden Access"})
+      }
+      next()
+    } 
+    const verifyInstructor=async(req,res,next)=>{
+      const verifiedEmail=req.decoded.email
+      const query={email:verifiedEmail}
+      const user=await userCollection.findOne(query)
+      if(user?.role!=='instructor'){
+        res.status(403).send({error:true, message:"Forbidden Access"})
+      }
+      next()
+    } 
+
     //class collections related api
     app.get('/classes', async (req, res) => {
       const result = await classCollection.find().toArray();
       res.send(result)
     })
-
+    app.post('/classes', async(req,res)=>{
+      const newClass=req.body 
+      const result=await classCollection.insertOne(newClass)
+      res.send(result)
+    })
     app.get('/classes/topsix', async (req, res) => {
       const allClasses = await classCollection.find().sort({ 'available_seats': -1 }).toArray()
       const topsix = allClasses.slice(0, 6)
@@ -101,7 +126,7 @@ async function run() {
       res.send(result)
     })
     //user Collection related api
-    app.get('/users', verifyJWT, async(req,res)=>{
+    app.get('/users', verifyJWT, verifyAdmin, async(req,res)=>{
       const result=await userCollection.find().toArray()
       res.send(result)
     })
@@ -139,11 +164,22 @@ async function run() {
       res.send(result)
     })
     //check admin or user
-    app.get('/users/admin/:email', async(req,res)=>{
+    app.get('/users/admin/:email', verifyJWT, async(req,res)=>{
       const email=req.params.email;
+      const verifiedEmail=req.decoded.email
+      if(verifiedEmail!==email){
+        res.send({admin:false})
+      }
       const query={email:email}
       const user=await userCollection.findOne(query)
       const result={admin:user?.role==='admin'}
+      res.send(result)
+    })
+    app.get('/users/instructor/:email', async(req,res)=>{
+      const email=req.params.email;
+      const query={email:email}
+      const user=await userCollection.findOne(query)
+      const result={instructor:user?.role==='instructor'}
       res.send(result)
     })
     // Send a ping to confirm a successful connection
