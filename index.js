@@ -2,6 +2,7 @@ const express = require('express')
 const jwt = require('jsonwebtoken');
 const cors = require('cors')
 require('dotenv').config()
+const stripe=require('stripe')(process.env.PAYMENT_SECRET_KEY)
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const app = express()
 const port = process.env.PORT || '5000'
@@ -44,18 +45,21 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
+    // Connect the client to the server	(optional starting in v4.7)
     app.post('/jwt', async (req, res) => {
       const user = req.body
       const token = jwt.sign(user, process.env.JWT_ACCESS_TOKEN, { expiresIn: '1h' })
       res.send({ token })
     })
-    // Connect the client to the server	(optional starting in v4.7)
-    await client.connect();
 
+    await client.connect();
+    
     const classCollection = client.db('fashionDesign').collection('classes')
     const instructorCollection = client.db('fashionDesign').collection('instructors')
     const selectedClassCollection = client.db('fashionDesign').collection('selectedClass')
     const userCollection = client.db('fashionDesign').collection('users')
+    const paymentCollection = client.db('fashionDesign').collection('payment')
+
 
     //verify user Admin or Instructor or others
     const verifyAdmin = async (req, res, next) => {
@@ -67,6 +71,7 @@ async function run() {
       }
       next()
     }
+
     const verifyInstructor = async (req, res, next) => {
       const verifiedEmail = req.decoded.email
       const query = { email: verifiedEmail }
@@ -82,15 +87,27 @@ async function run() {
       const result = await classCollection.find().toArray();
       res.send(result)
     })
+
     app.post('/classes', verifyJWT, verifyInstructor, async (req, res) => {
       const newClass = req.body
       const result = await classCollection.insertOne(newClass)
       res.send(result)
     })
+    app.get('/instructor/classes', verifyJWT, verifyInstructor, async (req, res) => {
+      const email = req.query.email
+      if (!email) {
+       return res.send([])
+      }
+      const query = { email: email }
+      const result = await classCollection.find(query).toArray();
+      res.send(result)
+    })
+
     app.get('/admin/classes',verifyJWT, verifyAdmin, async (req, res) => {
       const result = await classCollection.find().toArray();
       res.send(result)
     })
+
     app.put('/admin/approveClass/:id',verifyJWT, verifyAdmin, async (req, res)=>{
       const id=req.params.id
       const query={_id: new ObjectId(id)}
@@ -102,6 +119,7 @@ async function run() {
       const result = await classCollection.updateOne(query, updateDoc)
       res.send(result)
     })
+
     app.put('/admin/denyClass/:id',verifyJWT, verifyAdmin, async (req, res)=>{
       const id=req.params.id
       const query={_id: new ObjectId(id)}
@@ -113,49 +131,78 @@ async function run() {
       const result = await classCollection.updateOne(query, updateDoc)
       res.send(result)
     })
+
+    app.put('/admin/feedback/:id',verifyJWT, verifyAdmin, async (req, res)=>{
+      const id=req.params.id
+      const message=req.body
+      console.log(message)
+      const query={_id: new ObjectId(id)}
+      const updateDoc = {
+        $set: {
+          feedback: message
+        },
+      }; 
+      const result = await classCollection.updateOne(query, updateDoc)
+      res.send(result)
+    })
+
     app.get('/classes/topsix', async (req, res) => {
       const allClasses = await classCollection.find().sort({ 'available_seats': -1 }).toArray()
       const topsix = allClasses.slice(0, 6)
       res.send(topsix)
     })
+
+
     //instructor collections related api
     app.get('/instructors', async (req, res) => {
       const result = await instructorCollection.find().toArray();
       res.send(result)
     })
+
     app.get('/instructors/topsix', async (req, res) => {
       const allInstructors = await instructorCollection.find().sort({ 'taken_class': -1 }).toArray()
       const topsix = allInstructors.slice(0, 6)
       res.send(topsix)
     })
+
     //selectedClass releted api
     app.get('/selected/classes', verifyJWT, async (req, res) => {
       const email = req.query.email
       if (!email) {
-       return res.send([])
+       res.send([])
       }
       const query = { email: email }
       const result = await selectedClassCollection.find(query).toArray();
       res.send(result)
     })
 
-    app.post('/selected/classes', async (req, res) => {
+    app.post('/selected/classes', verifyJWT, async (req, res) => {
       const data = req.body
       const result = await selectedClassCollection.insertOne(data)
       res.send(result)
     })
 
-    app.delete('/selected/classes/:id', async (req, res) => {
+    app.delete('/selected/classes/:id', verifyJWT, async (req, res) => {
       const id = req.params.id
       const query = { _id: new ObjectId(id) }
       const result = await selectedClassCollection.deleteOne(query)
       res.send(result)
     })
+    //Enroll classes
+     app.get('/enroll/classes/:email', async (req, res) => {
+      const email=req.params.email
+      const query={email:email}
+      const result = await paymentCollection.find(query).toArray()
+      const enrollClass=result.map(item=>item)
+      res.send(enrollClass)
+    })
+
     //user Collection related api
     app.get('/users', verifyJWT, verifyAdmin, async (req, res) => {
       const result = await userCollection.find().toArray()
       res.send(result)
     })
+
     app.post('/users', async (req, res) => {
       const user = req.body
       const query = { email: user.email }
@@ -166,6 +213,7 @@ async function run() {
       const result = await userCollection.insertOne(user)
       res.send(result)
     })
+
     //user role manage api
     app.put('/users/admin/:id', async (req, res) => {
       const id = req.params.id
@@ -178,6 +226,7 @@ async function run() {
       const result = await userCollection.updateOne(query, updateDoc)
       res.send(result)
     })
+
     app.put('/users/instructor/:id', async (req, res) => {
       const id = req.params.id
       const query = { _id: new ObjectId(id) }
@@ -189,6 +238,7 @@ async function run() {
       const result = await userCollection.updateOne(query, updateDoc)
       res.send(result)
     })
+
     //check admin or user
     app.get('/users/admin/:email', verifyJWT, async (req, res) => {
       const email = req.params.email;
@@ -201,12 +251,34 @@ async function run() {
       const result = { admin: user?.role === 'admin' }
       res.send(result)
     })
+
     app.get('/users/instructor/:email', async (req, res) => {
       const email = req.params.email;
       const query = { email: email }
       const user = await userCollection.findOne(query)
       const result = { instructor: user?.role === 'instructor' }
       res.send(result)
+    })
+    //Payment Method APIs
+    app.post('/create-payment-intent', verifyJWT, async(req,res)=>{
+      const {price}=req.body
+      const amount=price*100
+      const paymentIntent=await stripe.paymentIntents.create({
+        amount:amount,
+        currency:'usd',
+        payment_method_types:['card']
+      })
+      res.send({
+        clientSecret: paymentIntent.client_secret,
+      })
+    })
+
+    app.post('/payment', verifyJWT, async(req,res)=>{
+      const paymentInfo=req.body
+      const insertResult = await paymentCollection.insertOne(paymentInfo)
+      const query={_id:{$in: paymentInfo.cartItems.map(id=>new ObjectId(id))}}
+      const deletedResult=await selectedClassCollection.deleteMany(query)
+      res.send({insertResult,deletedResult})
     })
     // Send a ping to confirm a successful connection
     await client.db("admin").command({ ping: 1 });
