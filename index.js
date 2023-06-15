@@ -52,8 +52,7 @@ async function run() {
       res.send({ token })
     })
 
-    await client.connect();
-    
+       
     const classCollection = client.db('fashionDesign').collection('classes')
     const instructorCollection = client.db('fashionDesign').collection('instructors')
     const selectedClassCollection = client.db('fashionDesign').collection('selectedClass')
@@ -196,7 +195,13 @@ async function run() {
       const enrollClass=result.map(item=>item)
       res.send(enrollClass)
     })
-
+    //payment history
+    app.get('/payment/history/:email', async (req, res) => {
+      const email=req.params.email
+      const query={email:email}
+      const result = await paymentCollection.find(query).sort({ 'date': -1 }).toArray()
+      res.send(result)
+    })
     //user Collection related api
     app.get('/users', verifyJWT, verifyAdmin, async (req, res) => {
       const result = await userCollection.find().toArray()
@@ -281,7 +286,7 @@ async function run() {
       res.send({insertResult,deletedResult})
     })
     // Send a ping to confirm a successful connection
-    await client.db("admin").command({ ping: 1 });
+    // await client.db("admin").command({ ping: 1 });
     console.log("Pinged your deployment. You successfully connected to MongoDB!");
   } finally {
     // Ensures that the client will close when you finish/error
